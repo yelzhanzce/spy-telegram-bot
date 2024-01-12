@@ -1,5 +1,6 @@
 package org.telegram.spybot;
 
+import lombok.extern.slf4j.Slf4j;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
@@ -15,8 +16,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
+@Slf4j
 public class SpyGameBot extends AbstractSpyGameBot {
+
+    private boolean isPlaying = false;
+    private static final String SPY_TEXT = "Шпион";
+
     @Override
     public void onUpdateReceived(Update update) {
         SendMessage message = new SendMessage();
@@ -32,40 +39,29 @@ public class SpyGameBot extends AbstractSpyGameBot {
             user.setUsername(username);
 
             if (messageText.equals("/plus")) {
-                plusUsers.put(username, user);
-                message.setText("Added: " + username);
-            } else if (messageText.equals("/ready") || messageText.equals("/.r")) {
-                if (plusUsers.keySet().contains(username)) {
+                if (isPlaying) {
+                    message.setText("the game is on");
+                } else {
+                    plusUsers.put(username, user);
+                    message.setText(getUserList());
+                }
+            } else if (messageText.equals("/ready") || messageText.equals(".r")) {
+                if (plusUsers.containsKey(username)) {
                     if (!readyUsers.contains(username)) {
                         readyUsers.add(username);
-                        message.setText(username + " is ready");
+                        message.setText(getUserList());
 
                         if (plusUsers.size() != 1 && plusUsers.size() == readyUsers.size()) {
-                            ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+                            isPlaying = true;
 
-                            // Создаем CompletableFuture
-                            CompletableFuture<Void> future = new CompletableFuture<>();
-
-                            // Запускаем задачу с задержкой 1 секунда
-                            scheduler.schedule(() -> {
-                                // Метод, который нужно вызвать
-                                sendMessages(this, getRandomSpyId(), getRandomCountry());
-                                // Завершаем CompletableFuture
-                                future.complete(null);
-                            }, 1, TimeUnit.SECONDS);
-
-                            // Добавляем обработчик завершения для CompletableFuture
-                            future.thenRun(() -> System.out.println("Метод выполнен"));
-
-                            // Закрываем scheduler
-                            scheduler.shutdown();
+                            sendInAsync(this::sendMessages, this);
                         }
                     }
                 } else {
-                    message.setText("send /plus");
+                    message.setText("You're not in list of players! Send /plus - to add");
                 }
 
-            } else if (messageText.equals("/unready")) {
+            } else if (messageText.equals("/unready") || messageText.equals(".ur")) {
                 readyUsers.remove(username);
             } else if (messageText.equals("/start")) {
                 if (plusUsers.size() != readyUsers.size()) {
@@ -75,23 +71,21 @@ public class SpyGameBot extends AbstractSpyGameBot {
             } else if (messageText.equals("/minus")) {
                 plusUsers.remove(username);
             } else if (messageText.equals("/list")) {
-                StringBuilder userLists = new StringBuilder();
-                AtomicInteger i = new AtomicInteger(1);
-                plusUsers.forEach((k, v) -> {
+                if (plusUsers.isEmpty()) {
+                    message.setText("players list is empty!");
+                } else {
+                    message.setText(getUserList());
+                }
 
-                    String userName = v.getUsername();
-                    String isReadyText = readyUsers.contains(userName) ? "isReady" : "notReady";
-                    String userList = i + ". @" + userName + "(" + isReadyText + ")" + "\n";
-                    i.incrementAndGet();
-                    userLists.append(userList);
-                });
-
-                message.setText(userLists.toString());
+            } else if (messageText.equals("/gg")) {
+                readyUsers.clear();
+                isPlaying = false;
+                sendInAsync(this::sendMessageToAllThatGameIsOver, this);
             }
 
             message.setChatId(String.valueOf(chatId));
             if (message.getText().isEmpty()) {
-                message.setText("Random fact");
+                message.setText("404...");
             }
 
             try {
@@ -100,6 +94,33 @@ public class SpyGameBot extends AbstractSpyGameBot {
                 e.printStackTrace();
             }
         }
+    }
+
+    private <T> void sendInAsync(Consumer<T> consumer, T accept) {
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        scheduler.schedule(() -> {
+            consumer.accept(accept);
+            future.complete(null);
+        }, 1, TimeUnit.SECONDS);
+
+        future.thenRun(() -> log.info("The method is executed"));
+        scheduler.shutdown();
+    }
+
+    private String getUserList() {
+        StringBuilder userLists = new StringBuilder();
+        AtomicInteger i = new AtomicInteger(1);
+        plusUsers.forEach((k, v) -> {
+
+            String userName = v.getUsername();
+            String isReadyText = readyUsers.contains(userName) ? "isReady" : "notReady";
+            String userList = i + ". @" + userName + "(" + isReadyText + ")" + "\n";
+            i.incrementAndGet();
+            userLists.append(userList);
+        });
+
+        return userLists.toString();
     }
 
     private String getRandomCountry() {
@@ -121,17 +142,35 @@ public class SpyGameBot extends AbstractSpyGameBot {
         return longs.get(random.nextInt(longs.size()));
     }
 
-    public void sendMessages(TelegramLongPollingBot bot, Long spyId, String countryName) {
+    public void sendMessages(TelegramLongPollingBot bot) {
+        Long spyId = getRandomSpyId();
+        String countryName = getRandomCountry();
         Set<Long> chatIds = getChatIds();
 
         for (Long chatId : chatIds) {
             SendMessage sendMessage = new SendMessage();
             sendMessage.setChatId(String.valueOf(chatId));
             if (chatId.equals(spyId)) {
-                sendMessage.setText("Шпион");
+                sendMessage.setText(SPY_TEXT);
             } else {
                 sendMessage.setText(countryName);
             }
+
+            try {
+                bot.execute(sendMessage);
+            } catch (TelegramApiException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public void sendMessageToAllThatGameIsOver(TelegramLongPollingBot bot) {
+        Set<Long> chatIds = getChatIds();
+
+        for (Long chatId : chatIds) {
+            SendMessage sendMessage = new SendMessage();
+            sendMessage.setChatId(String.valueOf(chatId));
+            sendMessage.setText("the game is over");
 
             try {
                 bot.execute(sendMessage);
