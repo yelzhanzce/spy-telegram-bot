@@ -24,8 +24,7 @@ public class SpyGameBot extends AbstractSpyGameBot {
     private boolean isPlaying = false;
     private static final String SPY_TEXT = "Шпион";
 
-    @Override
-    public void onUpdateReceived(Update update) {
+    protected void onAbstractUpdateReceived(Update update) {
         SendMessage message = new SendMessage();
 
         if (update.hasMessage() && update.getMessage().hasText()) {
@@ -38,49 +37,52 @@ public class SpyGameBot extends AbstractSpyGameBot {
             user.setFirstName(firstName);
             user.setUsername(username);
 
-            if (messageText.equals("/plus")) {
-                if (isPlaying) {
-                    message.setText("the game is on");
-                } else {
-                    plusUsers.put(username, user);
-                    message.setText(getUserList());
-                }
-            } else if (messageText.equals("/ready") || messageText.equals(".r")) {
-                if (plusUsers.containsKey(username)) {
-                    if (!readyUsers.contains(username)) {
-                        readyUsers.add(username);
+            switch (messageText) {
+                case "/plus" -> {
+                    if (isPlaying) {
+                        message.setText("the game is on");
+                    } else {
+                        plusUsers.put(username, user);
                         message.setText(getUserList());
-
-                        if (plusUsers.size() != 1 && plusUsers.size() == readyUsers.size()) {
-                            isPlaying = true;
-
-                            sendInAsync(this::sendMessages, this);
-                        }
                     }
-                } else {
-                    message.setText("You're not in list of players! Send /plus - to add");
                 }
+                case "/ready", ".r" -> {
+                    if (plusUsers.containsKey(username)) {
+                        if (!readyUsers.contains(username)) {
+                            readyUsers.add(username);
+                            message.setText(getUserList());
 
-            } else if (messageText.equals("/unready") || messageText.equals(".ur")) {
-                readyUsers.remove(username);
-            } else if (messageText.equals("/start")) {
-                if (plusUsers.size() != readyUsers.size()) {
-                    String readyCheck = readyUsers.size() + "/" + plusUsers.size();
-                    message.setText("Not everyone is ready(" + readyCheck + ")");
-                }
-            } else if (messageText.equals("/minus")) {
-                plusUsers.remove(username);
-            } else if (messageText.equals("/list")) {
-                if (plusUsers.isEmpty()) {
-                    message.setText("players list is empty!");
-                } else {
-                    message.setText(getUserList());
-                }
+                            if (plusUsers.size() != 1 && plusUsers.size() == readyUsers.size()) {
+                                isPlaying = true;
 
-            } else if (messageText.equals("/gg")) {
-                readyUsers.clear();
-                isPlaying = false;
-                sendInAsync(this::sendMessageToAllThatGameIsOver, this);
+                                sendInAsync(this::sendMessages, this);
+                            }
+                        }
+                    } else {
+                        message.setText("You're not in list of players! Send /plus - to add");
+                    }
+                }
+                case "/unready", ".ur" -> readyUsers.remove(username);
+                case "/start" -> {
+                    if (plusUsers.size() != readyUsers.size()) {
+                        String readyCheck = readyUsers.size() + "/" + plusUsers.size();
+                        message.setText("Not everyone is ready(" + readyCheck + ")");
+                    }
+                }
+                case "/minus" -> plusUsers.remove(username);
+                case "/list" -> {
+                    if (plusUsers.isEmpty()) {
+                        message.setText("players list is empty!");
+                    } else {
+                        message.setText(getUserList());
+                    }
+                }
+                case "/gg" -> {
+                    readyUsers.clear();
+                    isPlaying = false;
+                    sendInAsync(this::sendMessageToAllThatGameIsOver, this);
+                }
+                default -> message.setText("there is no such command!");
             }
 
             message.setChatId(String.valueOf(chatId));
@@ -142,7 +144,7 @@ public class SpyGameBot extends AbstractSpyGameBot {
         return longs.get(random.nextInt(longs.size()));
     }
 
-    public void sendMessages(TelegramLongPollingBot bot) {
+    private void sendMessages(TelegramLongPollingBot bot) {
         Long spyId = getRandomSpyId();
         String countryName = getRandomCountry();
         Set<Long> chatIds = getChatIds();
@@ -164,7 +166,7 @@ public class SpyGameBot extends AbstractSpyGameBot {
         }
     }
 
-    public void sendMessageToAllThatGameIsOver(TelegramLongPollingBot bot) {
+    private void sendMessageToAllThatGameIsOver(TelegramLongPollingBot bot) {
         Set<Long> chatIds = getChatIds();
 
         for (Long chatId : chatIds) {

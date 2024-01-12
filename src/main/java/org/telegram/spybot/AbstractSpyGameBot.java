@@ -1,6 +1,7 @@
 package org.telegram.spybot;
 
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.meta.api.objects.Update;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -138,6 +139,8 @@ public abstract class AbstractSpyGameBot extends TelegramLongPollingBot {
             "Costa Rica"
     );
 
+    protected abstract void onAbstractUpdateReceived(Update update);
+
     @Override
     public String getBotUsername() {
         return "@spykzbot";
@@ -146,5 +149,10 @@ public abstract class AbstractSpyGameBot extends TelegramLongPollingBot {
     @Override
     public String getBotToken() {
         return "6750136318:AAFcUUseY1CTIiYWDyuwro9qh_OoQRGK0hM";
+    }
+
+    @Override
+    public void onUpdateReceived(Update update) {
+        onAbstractUpdateReceived(update);
     }
 }
