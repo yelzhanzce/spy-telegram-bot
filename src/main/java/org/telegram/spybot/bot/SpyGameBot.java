@@ -1,6 +1,7 @@
-package org.telegram.spybot;
+package org.telegram.spybot.bot;
 
 import lombok.extern.slf4j.Slf4j;
+import org.telegram.spybot.dto.UserDto;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
@@ -8,31 +9,32 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+
+import static org.telegram.spybot.utils.SpyBotUtils.SPY_TEXT_RU;
+import static org.telegram.spybot.utils.SpyBotUtils.getRandomCountry;
 
 @Slf4j
 public class SpyGameBot extends AbstractSpyGameBot {
 
     private boolean isPlaying = false;
-    private static final String SPY_TEXT = "Шпион";
 
     protected void onAbstractUpdateReceived(Update update) {
-        SendMessage message = new SendMessage();
+        var message = new SendMessage();
 
         if (update.hasMessage() && update.getMessage().hasText()) {
-            String messageText = update.getMessage().getText();
-            long chatId = update.getMessage().getChatId();
-            String firstName = update.getMessage().getChat().getFirstName();
-            String username = update.getMessage().getFrom().getUserName();
-            User user = new User();
+            var messageText = update.getMessage().getText();
+            var chatId = update.getMessage().getChatId();
+            var firstName = update.getMessage().getChat().getFirstName();
+            var username = update.getMessage().getFrom().getUserName();
+
+            var user = new UserDto();
             user.setChatId(chatId);
             user.setFirstName(firstName);
             user.setUsername(username);
@@ -65,7 +67,7 @@ public class SpyGameBot extends AbstractSpyGameBot {
                 case "/unready", ".ur" -> readyUsers.remove(username);
                 case "/start" -> {
                     if (plusUsers.size() != readyUsers.size()) {
-                        String readyCheck = readyUsers.size() + "/" + plusUsers.size();
+                        var readyCheck = readyUsers.size() + "/" + plusUsers.size();
                         message.setText("Not everyone is ready(" + readyCheck + ")");
                     }
                 }
@@ -93,14 +95,14 @@ public class SpyGameBot extends AbstractSpyGameBot {
             try {
                 execute(message);
             } catch (TelegramApiException e) {
-                e.printStackTrace();
+                log.error("error : {}", e);
             }
         }
     }
 
     private <T> void sendInAsync(Consumer<T> consumer, T accept) {
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-        CompletableFuture<Void> future = new CompletableFuture<>();
+        var scheduler = Executors.newScheduledThreadPool(1);
+        var future = new CompletableFuture<Void>();
         scheduler.schedule(() -> {
             consumer.accept(accept);
             future.complete(null);
@@ -111,13 +113,13 @@ public class SpyGameBot extends AbstractSpyGameBot {
     }
 
     private String getUserList() {
-        StringBuilder userLists = new StringBuilder();
-        AtomicInteger i = new AtomicInteger(1);
+        var userLists = new StringBuilder();
+        var i = new AtomicInteger(1);
         plusUsers.forEach((k, v) -> {
 
-            String userName = v.getUsername();
-            String isReadyText = readyUsers.contains(userName) ? "isReady" : "notReady";
-            String userList = i + ". @" + userName + "(" + isReadyText + ")" + "\n";
+            var userName = v.getUsername();
+            var isReadyText = readyUsers.contains(userName) ? "isReady" : "notReady";
+            var userList = i + ". @" + userName + "(" + isReadyText + ")" + "\n";
             i.incrementAndGet();
             userLists.append(userList);
         });
@@ -125,35 +127,32 @@ public class SpyGameBot extends AbstractSpyGameBot {
         return userLists.toString();
     }
 
-    private String getRandomCountry() {
-        return countries.get(random.nextInt(countries.size()));
-    }
 
     private Set<Long> getChatIds() {
         Set<Long> chatIds = new HashSet<>();
-        for (Map.Entry<String, User> stringUserEntry : plusUsers.entrySet()) {
-            Long chatId = stringUserEntry.getValue().getChatId();
+        for (Map.Entry<String, UserDto> stringUserEntry : plusUsers.entrySet()) {
+            var chatId = stringUserEntry.getValue().getChatId();
             chatIds.add(chatId);
         }
         return chatIds;
     }
 
     private Long getRandomSpyId() {
-        Set<Long> chatIds = getChatIds();
-        List<Long> longs = new ArrayList<>(chatIds);
+        var chatIds = getChatIds();
+        var longs = new ArrayList<>(chatIds);
         return longs.get(random.nextInt(longs.size()));
     }
 
     private void sendMessages(TelegramLongPollingBot bot) {
-        Long spyId = getRandomSpyId();
-        String countryName = getRandomCountry();
-        Set<Long> chatIds = getChatIds();
+        var spyId = getRandomSpyId();
+        var countryName = getRandomCountry(random);
+        var chatIds = getChatIds();
 
         for (Long chatId : chatIds) {
-            SendMessage sendMessage = new SendMessage();
+            var sendMessage = new SendMessage();
             sendMessage.setChatId(String.valueOf(chatId));
             if (chatId.equals(spyId)) {
-                sendMessage.setText(SPY_TEXT);
+                sendMessage.setText(SPY_TEXT_RU);
             } else {
                 sendMessage.setText(countryName);
             }
@@ -167,10 +166,10 @@ public class SpyGameBot extends AbstractSpyGameBot {
     }
 
     private void sendMessageToAllThatGameIsOver(TelegramLongPollingBot bot) {
-        Set<Long> chatIds = getChatIds();
+        var chatIds = getChatIds();
 
         for (Long chatId : chatIds) {
-            SendMessage sendMessage = new SendMessage();
+            var sendMessage = new SendMessage();
             sendMessage.setChatId(String.valueOf(chatId));
             sendMessage.setText("the game is over");
 

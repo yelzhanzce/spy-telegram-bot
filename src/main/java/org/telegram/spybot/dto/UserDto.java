@@ -1,4 +1,4 @@
-package org.telegram.spybot;
+package org.telegram.spybot.dto;
 
 
 import lombok.Getter;
@@ -6,7 +6,7 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class User {
+public class UserDto {
     private String firstName;
     private String username;
     private Long chatId;

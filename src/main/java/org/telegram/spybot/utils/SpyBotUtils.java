@@ -1,22 +1,16 @@
-package org.telegram.spybot;
+package org.telegram.spybot.utils;
 
-import org.telegram.telegrambots.bots.TelegramLongPollingBot;
-import org.telegram.telegrambots.meta.api.objects.Update;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
-import java.util.Set;
 
-public abstract class AbstractSpyGameBot extends TelegramLongPollingBot {
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+public class SpyBotUtils {
 
-    protected Random random = new Random();
-    protected Map<String, User> plusUsers = new HashMap<>();
-    protected Set<String> readyUsers = new HashSet<>();
-
-    protected List<String> countries = List.of(
+    public static final String SPY_TEXT_RU = "Шпион";
+    public static final List<String> COUNTRIES = List.of(
             "China",
             "India",
             "United States",
@@ -139,20 +133,7 @@ public abstract class AbstractSpyGameBot extends TelegramLongPollingBot {
             "Costa Rica"
     );
 
-    protected abstract void onAbstractUpdateReceived(Update update);
-
-    @Override
-    public String getBotUsername() {
-        return "@spykzbot";
-    }
-
-    @Override
-    public String getBotToken() {
-        return "6750136318:AAFcUUseY1CTIiYWDyuwro9qh_OoQRGK0hM";
-    }
-
-    @Override
-    public void onUpdateReceived(Update update) {
-        onAbstractUpdateReceived(update);
+    public static String getRandomCountry(Random random) {
+        return COUNTRIES.get(random.nextInt(COUNTRIES.size()));
     }
 }
