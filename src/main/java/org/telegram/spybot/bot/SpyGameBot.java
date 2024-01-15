@@ -9,11 +9,10 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.telegram.spybot.utils.AsyncExecutor.sendInAsync;
+import static org.telegram.spybot.utils.AsyncExecutor.sendAsync;
 import static org.telegram.spybot.utils.SpyBotUtils.SPY_TEXT_RU;
 import static org.telegram.spybot.utils.SpyBotUtils.getRandomCountry;
 
@@ -68,7 +67,7 @@ public class SpyGameBot extends AbstractSpyGameBot {
     private void commandForGG() {
         readyUsers.clear();
         isPlaying = false;
-        sendInAsync(this::sendMessageToAllThatGameIsOver, this);
+        sendAsync(this::sendMessageToAllThatGameIsOver, this);
     }
 
     private void commandForList(SendMessage message) {
@@ -95,7 +94,7 @@ public class SpyGameBot extends AbstractSpyGameBot {
                 if (plusUsers.size() != 1 && plusUsers.size() == readyUsers.size()) {
                     isPlaying = true;
 
-                    sendInAsync(this::sendMessages, this);
+                    sendAsync(this::sendMessages, this);
                 }
             }
         } else {
@@ -139,7 +138,7 @@ public class SpyGameBot extends AbstractSpyGameBot {
 
     private Set<Long> getChatIds() {
         Set<Long> chatIds = new HashSet<>();
-        for (Map.Entry<String, UserDto> stringUserEntry : plusUsers.entrySet()) {
+        for (var stringUserEntry : plusUsers.entrySet()) {
             var chatId = stringUserEntry.getValue().getChatId();
             chatIds.add(chatId);
         }
