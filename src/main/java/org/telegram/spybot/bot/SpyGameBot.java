@@ -11,12 +11,9 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
 
+import static org.telegram.spybot.utils.AsyncExecutor.sendInAsync;
 import static org.telegram.spybot.utils.SpyBotUtils.SPY_TEXT_RU;
 import static org.telegram.spybot.utils.SpyBotUtils.getRandomCountry;
 
@@ -27,67 +24,23 @@ public class SpyGameBot extends AbstractSpyGameBot {
 
     protected void onAbstractUpdateReceived(Update update) {
         var message = new SendMessage();
+        var username = update.getMessage().getFrom().getUserName();
 
         if (update.hasMessage() && update.getMessage().hasText()) {
-            var messageText = update.getMessage().getText();
-            var chatId = update.getMessage().getChatId();
-            var firstName = update.getMessage().getChat().getFirstName();
-            var username = update.getMessage().getFrom().getUserName();
+            var command = update.getMessage().getText();
 
-            var user = new UserDto();
-            user.setChatId(chatId);
-            user.setFirstName(firstName);
-            user.setUsername(username);
-
-            switch (messageText) {
-                case "/plus" -> {
-                    if (isPlaying) {
-                        message.setText("the game is on");
-                    } else {
-                        plusUsers.put(username, user);
-                        message.setText(getUserList());
-                    }
-                }
-                case "/ready", ".r" -> {
-                    if (plusUsers.containsKey(username)) {
-                        if (!readyUsers.contains(username)) {
-                            readyUsers.add(username);
-                            message.setText(getUserList());
-
-                            if (plusUsers.size() != 1 && plusUsers.size() == readyUsers.size()) {
-                                isPlaying = true;
-
-                                sendInAsync(this::sendMessages, this);
-                            }
-                        }
-                    } else {
-                        message.setText("You're not in list of players! Send /plus - to add");
-                    }
-                }
-                case "/unready", ".ur" -> readyUsers.remove(username);
-                case "/start" -> {
-                    if (plusUsers.size() != readyUsers.size()) {
-                        var readyCheck = readyUsers.size() + "/" + plusUsers.size();
-                        message.setText("Not everyone is ready(" + readyCheck + ")");
-                    }
-                }
-                case "/minus" -> plusUsers.remove(username);
-                case "/list" -> {
-                    if (plusUsers.isEmpty()) {
-                        message.setText("players list is empty!");
-                    } else {
-                        message.setText(getUserList());
-                    }
-                }
-                case "/gg" -> {
-                    readyUsers.clear();
-                    isPlaying = false;
-                    sendInAsync(this::sendMessageToAllThatGameIsOver, this);
-                }
-                default -> message.setText("there is no such command!");
+            switch (command) {
+                case "/plus" -> commandForPlus(message, update);
+                case "/ready", ".r" -> commandForReady(username, message);
+                case "/unready", ".ur" -> commandForUnready(username);
+                case "/start" -> commandForStart(message);
+                case "/minus" -> commandForMinus(username);
+                case "/list" -> commandForList(message);
+                case "/gg" -> commandForGG();
+                default -> commandForDefault(message);
             }
 
-            message.setChatId(String.valueOf(chatId));
+            message.setChatId(update.getMessage().getChatId());
             if (message.getText().isEmpty()) {
                 message.setText("404...");
             }
@@ -95,32 +48,88 @@ public class SpyGameBot extends AbstractSpyGameBot {
             try {
                 execute(message);
             } catch (TelegramApiException e) {
-                log.error("error : {}", e);
+                log.error("error : {}", e.getMessage());
             }
         }
     }
 
-    private <T> void sendInAsync(Consumer<T> consumer, T accept) {
-        var scheduler = Executors.newScheduledThreadPool(1);
-        var future = new CompletableFuture<Void>();
-        scheduler.schedule(() -> {
-            consumer.accept(accept);
-            future.complete(null);
-        }, 1, TimeUnit.SECONDS);
+    private static void commandForDefault(SendMessage message) {
+        message.setText("there is no such command!");
+    }
 
-        future.thenRun(() -> log.info("The method is executed"));
-        scheduler.shutdown();
+    private void commandForMinus(String username) {
+        plusUsers.remove(username);
+    }
+
+    private void commandForUnready(String username) {
+        readyUsers.remove(username);
+    }
+
+    private void commandForGG() {
+        readyUsers.clear();
+        isPlaying = false;
+        sendInAsync(this::sendMessageToAllThatGameIsOver, this);
+    }
+
+    private void commandForList(SendMessage message) {
+        if (plusUsers.isEmpty()) {
+            message.setText("players list is empty!");
+        } else {
+            message.setText(getUserList());
+        }
+    }
+
+    private void commandForStart(SendMessage message) {
+        if (plusUsers.size() != readyUsers.size()) {
+            var readyCheck = readyUsers.size() + "/" + plusUsers.size();
+            message.setText("Not everyone is ready(" + readyCheck + ")");
+        }
+    }
+
+    private void commandForReady(String username, SendMessage message) {
+        if (plusUsers.containsKey(username)) {
+            if (!readyUsers.contains(username)) {
+                readyUsers.add(username);
+                message.setText(getUserList());
+
+                if (plusUsers.size() != 1 && plusUsers.size() == readyUsers.size()) {
+                    isPlaying = true;
+
+                    sendInAsync(this::sendMessages, this);
+                }
+            }
+        } else {
+            message.setText("You're not in list of players! Send /plus - to add");
+        }
+    }
+
+    private void commandForPlus(SendMessage message, Update update) {
+        var chatId = update.getMessage().getChatId();
+        var firstName = update.getMessage().getChat().getFirstName();
+        var username = update.getMessage().getFrom().getUserName();
+
+        var user = new UserDto();
+        user.setChatId(chatId);
+        user.setFirstName(firstName);
+        user.setUsername(username);
+
+        if (isPlaying) {
+            message.setText("the game is on");
+        } else {
+            plusUsers.put(username, user);
+            message.setText(getUserList());
+        }
     }
 
     private String getUserList() {
         var userLists = new StringBuilder();
         var i = new AtomicInteger(1);
         plusUsers.forEach((k, v) -> {
-
             var userName = v.getUsername();
-            var isReadyText = readyUsers.contains(userName) ? "isReady" : "notReady";
+            var isReadyText = readyUsers.contains(userName) ? "ready" : "not ready";
             var userList = i + ". @" + userName + "(" + isReadyText + ")" + "\n";
             i.incrementAndGet();
+
             userLists.append(userList);
         });
 
@@ -148,7 +157,7 @@ public class SpyGameBot extends AbstractSpyGameBot {
         var countryName = getRandomCountry(random);
         var chatIds = getChatIds();
 
-        for (Long chatId : chatIds) {
+        for (var chatId : chatIds) {
             var sendMessage = new SendMessage();
             sendMessage.setChatId(String.valueOf(chatId));
             if (chatId.equals(spyId)) {
@@ -160,7 +169,7 @@ public class SpyGameBot extends AbstractSpyGameBot {
             try {
                 bot.execute(sendMessage);
             } catch (TelegramApiException e) {
-                e.printStackTrace();
+                log.error("error: {}", e.getMessage());
             }
         }
     }
@@ -168,7 +177,7 @@ public class SpyGameBot extends AbstractSpyGameBot {
     private void sendMessageToAllThatGameIsOver(TelegramLongPollingBot bot) {
         var chatIds = getChatIds();
 
-        for (Long chatId : chatIds) {
+        for (var chatId : chatIds) {
             var sendMessage = new SendMessage();
             sendMessage.setChatId(String.valueOf(chatId));
             sendMessage.setText("the game is over");
@@ -176,7 +185,7 @@ public class SpyGameBot extends AbstractSpyGameBot {
             try {
                 bot.execute(sendMessage);
             } catch (TelegramApiException e) {
-                e.printStackTrace();
+                log.error("error: {}", e.getMessage());
             }
         }
     }
